@@ -24,24 +24,64 @@ export const signin = async (req, res, next) => {
     // valid user verification
     const validUser = await User.findOne({ email });
     if (!validUser) return next(errorHandler(404, "User Not found"));
-    const validPassword = bcryptjs.compareSync(
-      password,
-      validUser.password
-    );
+    const validPassword = bcryptjs.compareSync(password, validUser.password);
     if (!validPassword)
       return next(errorHandler(401, "Invalid Credentials. !!"));
 
-
-    // creating a unique token using jsonwebtoken package to store into cookie 
+    // creating a unique token using jsonwebtoken package to store into cookie
     const token = jsonwebtoken.sign(
       { id: validUser._id },
       process.env.JSONWEBTOKEN_SECRET
     );
-    const {password:pass, ...rest} = validUser._doc;
+    const { password: pass, ...rest } = validUser._doc;
     res
       .cookie("access_token", token, { httpOnly: true }) // cookie to be stored in local browser
       .status(200)
-      .json(rest); // rest is the valid user credential without password 
+      .json(rest); // rest is the valid user credential without password
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const google = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ email: req.body.email });
+    if (user) {
+      const token = jsonwebtoken.sign(
+        { id: user._id },
+        process.env.JSONWEBTOKEN_SECRET
+      );
+      const { password: pass, ...rest } = user._doc;
+      res
+        .cookie("access_token", token, { httpOnly: true })
+        .status(200)
+        .json(rest);
+    } else {
+      const generatedPassword =
+        Math.random().toString(36).slice(-8) +
+        Math.random().toString(36).slice(-8);
+      const encryptedpassword = bcryptjs.hashSync(generatedPassword, 10);
+      const generatedUsername =
+        req.body.name.split(" ").join("").toLowerCase() +
+        Math.random().toString(36).slice(-4);
+      const newUser = new User({
+        username: generatedUsername,
+        email: req.body.email,
+        password: encryptedpassword,
+        avatar: req.body.photoURL,
+      });
+      await newUser.save();
+
+      const token = jsonwebtoken.sign(
+        { id: newUser._id },
+        process.env.JSONWEBTOKEN_SECRET
+      );
+      const { password: pass, ...rest } = newUser._doc;
+      res
+        .cookie("access_token", token, { httpOnly: true })
+        .status(200)
+        .json(rest);
+    }
   } catch (error) {
     next(error);
   }
